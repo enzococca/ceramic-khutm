@@ -23,6 +23,8 @@ from openpyxl.styles import Font, Alignment, PatternFill
 import tempfile
 import traceback
 
+from plate_generator import PlateGenerator, get_layouts, get_layout_by_id, generate_excel_report
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ceramica-khutm-secret-2024'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
@@ -581,6 +583,225 @@ def db_stats():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ============== Plate Generator API ==============
+
+PLATES_DIR = Path(__file__).parent / "exports" / "plates"
+PLATES_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@app.route('/api/plates/periods')
+def api_plates_periods():
+    """Get available periods from classification results."""
+    results = classification_state.get('results', [])
+    periods = {}
+
+    for result in results:
+        if result.get('status') == 'success':
+            classification = result.get('classification', {})
+            period = classification.get('period_suggestion', 'Unknown')
+            if period:
+                periods[period] = periods.get(period, 0) + 1
+
+    return jsonify({
+        'success': True,
+        'periods': [{'name': k, 'count': v} for k, v in sorted(periods.items())]
+    })
+
+
+@app.route('/api/plates/items')
+def api_plates_items():
+    """Get classified items filtered by period and/or US."""
+    period = request.args.get('period')
+    us_filter = request.args.get('us')
+
+    results = classification_state.get('results', [])
+    items = []
+
+    for result in results:
+        if result.get('status') != 'success':
+            continue
+
+        classification = result.get('classification', {})
+        item_period = classification.get('period_suggestion', '')
+
+        if period and item_period != period:
+            continue
+
+        item_us = result.get('us', '')
+        if us_filter and str(item_us) != str(us_filter):
+            continue
+
+        items.append({
+            'id': result.get('id_rep', 'N/A'),
+            'us': item_us,
+            'period': item_period,
+            'thumbnail': result.get('thumbnail', ''),
+            'image_path': '',
+            'form': result.get('form', ''),
+            'decoration': result.get('decoration_type', '')
+        })
+
+    return jsonify({
+        'success': True,
+        'items': items,
+        'count': len(items)
+    })
+
+
+@app.route('/api/plates/layouts')
+def api_plates_layouts():
+    """Get available layout definitions."""
+    return jsonify({
+        'success': True,
+        'layouts': get_layouts()
+    })
+
+
+@app.route('/api/plates/preview', methods=['POST'])
+def api_plates_preview():
+    """Generate preview image for a plate."""
+    try:
+        data = request.json
+        item_ids = data.get('items', [])
+        layout_id = data.get('layout_id', '2x2')
+        caption_format = data.get('caption_format', 'inv')
+
+        # Convert IDs to full item objects from classification results
+        results = classification_state.get('results', [])
+        items = []
+        for result in results:
+            if result.get('status') == 'success':
+                item_id = result.get('id_rep', '')
+                if str(item_id) in [str(i) for i in item_ids]:
+                    classification = result.get('classification', {})
+                    items.append({
+                        'id': item_id,
+                        'us': result.get('us', ''),
+                        'sito': result.get('sito', ''),
+                        'period': classification.get('period_suggestion', ''),
+                        'thumbnail': result.get('thumbnail', ''),
+                        'image_path': result.get('image_path', '')
+                    })
+
+        generator = PlateGenerator(str(PLATES_DIR))
+        preview = generator.generate_preview(items, layout_id, caption_format)
+
+        return jsonify({
+            'success': True,
+            'preview': preview
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/api/plates/generate', methods=['POST'])
+def api_plates_generate():
+    """Generate PDF plates."""
+    try:
+        data = request.json
+        item_ids = data.get('items', [])
+        layout_id = data.get('layout_id', '2x2')
+        period = data.get('period', 'Unknown')
+        group_by_us = data.get('group_by_us', False)
+        caption_format = data.get('caption_format', 'inv')
+        start_plate_number = data.get('start_plate_number', 1)
+
+        # Convert IDs to full item objects from classification results
+        results = classification_state.get('results', [])
+        items = []
+        for result in results:
+            if result.get('status') == 'success':
+                item_id = result.get('id_rep', '')
+                if str(item_id) in [str(i) for i in item_ids]:
+                    classification = result.get('classification', {})
+                    items.append({
+                        'id': item_id,
+                        'us': result.get('us', ''),
+                        'sito': result.get('sito', ''),
+                        'period': classification.get('period_suggestion', ''),
+                        'thumbnail': result.get('thumbnail', ''),
+                        'image_path': result.get('image_path', '')
+                    })
+
+        generator = PlateGenerator(str(PLATES_DIR))
+        filename, assignments = generator.generate_plates(
+            items=items,
+            layout_id=layout_id,
+            period=period,
+            group_by_us=group_by_us,
+            caption_format=caption_format,
+            start_plate_number=start_plate_number
+        )
+
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'plates_count': len(set(a['plate_number'] for a in assignments)),
+            'items_count': len(assignments)
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/api/plates/report', methods=['POST'])
+def api_plates_report():
+    """Generate Excel report for plate assignments."""
+    try:
+        data = request.json
+        plates = data.get('plates', [])
+
+        # Convert nested plates data to flat assignments format
+        assignments = []
+        for plate in plates:
+            plate_number = plate.get('plate_number', 0)
+            period = plate.get('period', '')
+            us = plate.get('us', '')
+            items = plate.get('items', [])
+
+            for pos, item in enumerate(items, 1):
+                assignments.append({
+                    'plate_number': plate_number,
+                    'position': pos,
+                    'id': item.get('id', ''),
+                    'us': item.get('us', us),
+                    'period': period,
+                    'layout': data.get('layout_id', '2x3')
+                })
+
+        filename = generate_excel_report(assignments, str(PLATES_DIR))
+
+        return jsonify({
+            'success': True,
+            'filename': filename
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/api/plates/download/<filename>')
+def api_plates_download(filename):
+    """Download generated plate file."""
+    filepath = PLATES_DIR / filename
+    if filepath.exists():
+        return send_file(filepath, as_attachment=True)
+    return jsonify({'error': 'File not found'}), 404
 
 
 # Socket events

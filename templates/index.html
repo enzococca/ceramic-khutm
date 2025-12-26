@@ -6,6 +6,7 @@
     <title>Ceramica KhUTM - Classification</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -398,6 +399,123 @@
                 flex-direction: column;
             }
         }
+
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+        .tab-btn {
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #888;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .tab-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .tab-btn.active {
+            background: linear-gradient(45deg, #00d4ff, #7b2cbf);
+            color: #fff;
+            border-color: transparent;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Plates UI Styles */
+        .plates-container { display: flex; gap: 20px; min-height: 600px; flex-wrap: nowrap; }
+        .plates-sidebar {
+            width: 280px;
+            min-width: 280px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .plates-main { flex: 1; display: flex; flex-direction: column; gap: 15px; min-width: 0; }
+        .plates-preview-area { flex: 1; display: flex; gap: 15px; }
+        .plates-canvas-wrapper {
+            flex: 1;
+            background: #fff;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 500px;
+            position: relative;
+            min-width: 0;
+        }
+        .plates-items-pool {
+            width: 180px;
+            min-width: 180px;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 10px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .pool-item {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 8px;
+            cursor: grab;
+            transition: all 0.2s;
+        }
+        .pool-item:hover { background: rgba(0,212,255,0.2); }
+        .pool-item img { width: 100%; border-radius: 4px; }
+        .pool-item .pool-item-caption { font-size: 11px; color: #aaa; margin-top: 5px; text-align: center; }
+        .layout-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .layout-option {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid transparent;
+            border-radius: 6px;
+            padding: 6px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .layout-option:hover { background: rgba(0,212,255,0.2); }
+        .layout-option.selected { border-color: #00d4ff; background: rgba(0,212,255,0.2); }
+        .layout-option .layout-preview {
+            width: 45px;
+            height: 60px;
+            margin: 0 auto 5px;
+            background: #333;
+            border-radius: 3px;
+            display: flex;
+            flex-wrap: wrap;
+            padding: 2px;
+            gap: 1px;
+        }
+        .layout-option .layout-name { font-size: 9px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .plates-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .plates-nav { display: flex; align-items: center; gap: 15px; justify-content: center; }
+        .plates-nav button { padding: 8px 16px; }
+        .plate-number { font-size: 1.2em; font-weight: 600; color: #00d4ff; }
+        .filter-group { display: flex; flex-direction: column; gap: 8px; }
+        .filter-group label { color: #888; font-size: 12px; }
+        .filter-group select, .filter-group input {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+        .filter-group select option { background: #1a1a2e; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; }
+        .checkbox-group input[type="checkbox"] { width: 18px; height: 18px; }
+        .empty-state {
+            text-align: center;
+            color: #888;
+            padding: 40px;
+        }
+        .empty-state p { margin-top: 10px; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -406,6 +524,15 @@
             <h1>🏺 Ceramica KhUTM</h1>
             <p>Sistema di Classificazione ML per Ceramiche Archeologiche</p>
         </header>
+
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('classification')">🔬 Classificazione</button>
+            <button class="tab-btn" onclick="switchTab('plates')">📋 Tavole</button>
+        </div>
+
+        <!-- Classification Tab -->
+        <div id="tab-classification" class="tab-content active">
 
         <!-- Controls -->
         <div class="controls">
@@ -576,6 +703,85 @@
             <h3>📝 Log</h3>
             <div class="log-container" id="logContainer"></div>
         </div>
+
+        </div><!-- End Classification Tab -->
+
+        <!-- Plates Tab -->
+        <div id="tab-plates" class="tab-content">
+            <div class="plates-container">
+                <!-- Sidebar: Filters & Layouts -->
+                <div class="plates-sidebar">
+                    <div class="card">
+                        <h3>🔍 Filtri</h3>
+                        <div class="filter-group">
+                            <label>Periodo</label>
+                            <select id="platesPeriodSelect" onchange="loadPlatesItems()">
+                                <option value="">-- Seleziona periodo --</option>
+                            </select>
+                        </div>
+                        <div class="filter-group" style="margin-top: 10px;">
+                            <label>US (opzionale)</label>
+                            <select id="platesUSSelect" onchange="loadPlatesItems()">
+                                <option value="">Tutte le US</option>
+                            </select>
+                        </div>
+                        <div class="checkbox-group" style="margin-top: 10px;">
+                            <input type="checkbox" id="groupByUS" onchange="loadPlatesItems()">
+                            <label for="groupByUS">Raggruppa per US</label>
+                        </div>
+                        <div class="filter-group" style="margin-top: 10px;">
+                            <label>Formato Caption</label>
+                            <select id="captionFormat">
+                                <option value="id">Solo ID</option>
+                                <option value="id_us" selected>ID + US</option>
+                                <option value="id_us_sito">ID + US + Sito</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>📐 Layout</h3>
+                        <div class="layout-grid" id="layoutGrid"></div>
+                    </div>
+
+                    <div class="card">
+                        <h3>⚙️ Azioni</h3>
+                        <div class="plates-actions">
+                            <button class="btn-primary" onclick="generatePlatesPreview()">👁️ Anteprima</button>
+                            <button class="btn-success" onclick="generatePlatesPDF()">📄 Genera PDF</button>
+                            <button class="btn-warning" onclick="generatePlatesExcel()">📊 Report Excel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main: Preview & Items Pool -->
+                <div class="plates-main">
+                    <div class="plates-nav">
+                        <button class="btn-primary" onclick="prevPlate()">◀ Precedente</button>
+                        <span class="plate-number">Tavola <span id="currentPlateNum">1</span> di <span id="totalPlatesNum">1</span></span>
+                        <button class="btn-primary" onclick="nextPlate()">Successiva ▶</button>
+                    </div>
+
+                    <div class="plates-preview-area">
+                        <!-- Items Pool -->
+                        <div class="plates-items-pool">
+                            <h4 style="margin-bottom: 10px; color: #00d4ff;">📦 Items</h4>
+                            <div id="platesItemsPool">
+                                <div class="empty-state">
+                                    <p>Seleziona un periodo per caricare gli items</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Canvas Preview -->
+                        <div class="plates-canvas-wrapper">
+                            <canvas id="platesCanvas" width="595" height="842"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End Plates Tab -->
+
     </div>
 
     <script>
@@ -869,6 +1075,465 @@
                 clearInterval(timerInterval);
                 timerInterval = null;
             }
+        }
+
+        // ============================================
+        // PLATES TAB FUNCTIONALITY
+        // ============================================
+
+        let platesCanvas = null;
+        let platesItems = [];
+        let platesLayouts = [];
+        let selectedLayout = '2x3';
+        let currentPlate = 0;
+        let plateAssignments = [];
+
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+
+            if (tabName === 'plates') {
+                initPlatesTab();
+            }
+        }
+
+        // Initialize plates tab
+        function initPlatesTab() {
+            if (!platesCanvas) {
+                platesCanvas = new fabric.Canvas('platesCanvas', {
+                    backgroundColor: '#ffffff',
+                    selection: true
+                });
+            }
+            loadPlatesPeriods();
+            loadPlatesLayouts();
+        }
+
+        // Load available periods
+        function loadPlatesPeriods() {
+            fetch('/api/plates/periods')
+                .then(r => r.json())
+                .then(data => {
+                    const select = document.getElementById('platesPeriodSelect');
+                    select.innerHTML = '<option value="">-- Seleziona periodo --</option>';
+                    (data.periods || []).forEach(period => {
+                        const opt = document.createElement('option');
+                        // Period can be object {name, count} or string
+                        const periodName = typeof period === 'object' ? period.name : period;
+                        const periodCount = typeof period === 'object' ? period.count : '';
+                        opt.value = periodName;
+                        opt.textContent = periodName + (periodCount ? ` (${periodCount})` : '');
+                        select.appendChild(opt);
+                    });
+                })
+                .catch(err => console.error('Error loading periods:', err));
+        }
+
+        // Load layouts
+        function loadPlatesLayouts() {
+            fetch('/api/plates/layouts')
+                .then(r => r.json())
+                .then(data => {
+                    platesLayouts = data.layouts || [];
+                    renderLayoutGrid();
+                })
+                .catch(err => console.error('Error loading layouts:', err));
+        }
+
+        // Render layout selection grid
+        function renderLayoutGrid() {
+            const grid = document.getElementById('layoutGrid');
+            grid.innerHTML = '';
+            platesLayouts.forEach(layout => {
+                const div = document.createElement('div');
+                div.className = 'layout-option' + (layout.id === selectedLayout ? ' selected' : '');
+                div.onclick = () => selectLayout(layout.id);
+
+                const preview = document.createElement('div');
+                preview.className = 'layout-preview';
+                // Simple visual representation
+                const cells = layout.cells || 4;
+                const cols = Math.ceil(Math.sqrt(cells));
+                for (let i = 0; i < cells; i++) {
+                    const cell = document.createElement('div');
+                    cell.style.cssText = `flex: 1 0 ${100/cols - 5}%; height: ${100/cols - 5}%; background: #00d4ff; border-radius: 2px;`;
+                    preview.appendChild(cell);
+                }
+
+                const name = document.createElement('div');
+                name.className = 'layout-name';
+                name.textContent = layout.name;
+
+                div.appendChild(preview);
+                div.appendChild(name);
+                grid.appendChild(div);
+            });
+        }
+
+        // Select layout
+        function selectLayout(layoutId) {
+            selectedLayout = layoutId;
+            document.querySelectorAll('.layout-option').forEach(opt => opt.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+            if (platesItems.length > 0) {
+                assignItemsToPlates();
+                updatePlatesPreview();
+            }
+        }
+
+        // Load items for selected period/US
+        function loadPlatesItems() {
+            const period = document.getElementById('platesPeriodSelect').value;
+            const us = document.getElementById('platesUSSelect').value;
+
+            if (!period) {
+                document.getElementById('platesItemsPool').innerHTML = '<div class="empty-state"><p>Seleziona un periodo per caricare gli items</p></div>';
+                return;
+            }
+
+            const params = new URLSearchParams({ period });
+            if (us) params.append('us', us);
+
+            fetch('/api/plates/items?' + params)
+                .then(r => r.json())
+                .then(data => {
+                    platesItems = data.items || [];
+
+                    // Update US dropdown
+                    const usSet = new Set();
+                    platesItems.forEach(item => {
+                        if (item.us) usSet.add(item.us);
+                    });
+                    const usSelect = document.getElementById('platesUSSelect');
+                    const currentUS = usSelect.value;
+                    usSelect.innerHTML = '<option value="">Tutte le US</option>';
+                    Array.from(usSet).sort().forEach(usVal => {
+                        const opt = document.createElement('option');
+                        opt.value = usVal;
+                        opt.textContent = 'US ' + usVal;
+                        if (usVal === currentUS) opt.selected = true;
+                        usSelect.appendChild(opt);
+                    });
+
+                    renderItemsPool();
+                    assignItemsToPlates();
+                    updatePlatesPreview();
+                })
+                .catch(err => console.error('Error loading items:', err));
+        }
+
+        // Render items pool
+        function renderItemsPool() {
+            const pool = document.getElementById('platesItemsPool');
+            if (platesItems.length === 0) {
+                pool.innerHTML = '<div class="empty-state"><p>Nessun item trovato</p></div>';
+                return;
+            }
+
+            pool.innerHTML = '';
+            platesItems.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'pool-item';
+                div.draggable = true;
+                div.dataset.index = idx;
+
+                const img = document.createElement('img');
+                img.src = item.thumbnail || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23333" width="100" height="100"/></svg>';
+
+                const caption = document.createElement('div');
+                caption.className = 'pool-item-caption';
+                caption.textContent = item.id + (item.us ? ' - US' + item.us : '');
+
+                div.appendChild(img);
+                div.appendChild(caption);
+                pool.appendChild(div);
+            });
+        }
+
+        // Assign items to plates based on layout
+        function assignItemsToPlates() {
+            const layout = platesLayouts.find(l => l.id === selectedLayout);
+            if (!layout) return;
+
+            const cellsPerPlate = layout.cells || 4;
+            plateAssignments = [];
+
+            const groupByUS = document.getElementById('groupByUS').checked;
+
+            if (groupByUS) {
+                // Group by US
+                const byUS = {};
+                platesItems.forEach(item => {
+                    const us = item.us || 'Unknown';
+                    if (!byUS[us]) byUS[us] = [];
+                    byUS[us].push(item);
+                });
+
+                Object.entries(byUS).forEach(([us, items]) => {
+                    for (let i = 0; i < items.length; i += cellsPerPlate) {
+                        plateAssignments.push({
+                            us: us,
+                            items: items.slice(i, i + cellsPerPlate)
+                        });
+                    }
+                });
+            } else {
+                // No grouping
+                for (let i = 0; i < platesItems.length; i += cellsPerPlate) {
+                    plateAssignments.push({
+                        items: platesItems.slice(i, i + cellsPerPlate)
+                    });
+                }
+            }
+
+            currentPlate = 0;
+            document.getElementById('totalPlatesNum').textContent = plateAssignments.length || 1;
+            document.getElementById('currentPlateNum').textContent = plateAssignments.length > 0 ? 1 : 0;
+        }
+
+        // Update preview
+        function updatePlatesPreview() {
+            if (!platesCanvas) return;
+            platesCanvas.clear();
+            platesCanvas.backgroundColor = '#ffffff';
+
+            if (plateAssignments.length === 0 || !plateAssignments[currentPlate]) {
+                platesCanvas.renderAll();
+                return;
+            }
+
+            const plate = plateAssignments[currentPlate];
+            const layout = platesLayouts.find(l => l.id === selectedLayout);
+            if (!layout || !layout.grid) return;
+
+            const captionFormat = document.getElementById('captionFormat').value;
+            const period = document.getElementById('platesPeriodSelect').value;
+
+            // Add header
+            const header = new fabric.Text('Tavola ' + (currentPlate + 1) + ' - ' + period + (plate.us ? ' (US ' + plate.us + ')' : ''), {
+                left: 297,
+                top: 25,
+                fontSize: 14,
+                fontFamily: 'Arial',
+                fill: '#333',
+                originX: 'center'
+            });
+            platesCanvas.add(header);
+
+            // Add items to cells
+            plate.items.forEach((item, idx) => {
+                if (idx >= layout.grid.length) return;
+                const cell = layout.grid[idx];
+
+                // Scale from A4 points to canvas
+                const scaleX = 595 / 595.27;
+                const scaleY = 842 / 841.89;
+                const x = cell.x * scaleX;
+                const y = cell.y * scaleY;
+                const w = cell.w * scaleX;
+                const h = cell.h * scaleY;
+
+                // Cell border
+                const rect = new fabric.Rect({
+                    left: x,
+                    top: y,
+                    width: w,
+                    height: h - 20,
+                    fill: '#f5f5f5',
+                    stroke: '#ddd',
+                    strokeWidth: 1
+                });
+                platesCanvas.add(rect);
+
+                // Load image
+                if (item.thumbnail) {
+                    fabric.Image.fromURL(item.thumbnail, function(img) {
+                        if (!img) return;
+                        const scale = Math.min((w - 10) / img.width, (h - 30) / img.height);
+                        img.set({
+                            left: x + w/2,
+                            top: y + (h - 20)/2,
+                            scaleX: scale,
+                            scaleY: scale,
+                            originX: 'center',
+                            originY: 'center'
+                        });
+                        platesCanvas.add(img);
+                        platesCanvas.renderAll();
+                    });
+                }
+
+                // Caption
+                let captionText = item.id;
+                if (captionFormat === 'id_us' && item.us) captionText += ' - US' + item.us;
+                if (captionFormat === 'id_us_sito') captionText += (item.us ? ' - US' + item.us : '') + (item.sito ? ' - ' + item.sito : '');
+
+                const caption = new fabric.Text(captionText, {
+                    left: x + w/2,
+                    top: y + h - 12,
+                    fontSize: 9,
+                    fontFamily: 'Arial',
+                    fill: '#333',
+                    originX: 'center'
+                });
+                platesCanvas.add(caption);
+            });
+
+            platesCanvas.renderAll();
+        }
+
+        // Navigation
+        function prevPlate() {
+            if (currentPlate > 0) {
+                currentPlate--;
+                document.getElementById('currentPlateNum').textContent = currentPlate + 1;
+                updatePlatesPreview();
+            }
+        }
+
+        function nextPlate() {
+            if (currentPlate < plateAssignments.length - 1) {
+                currentPlate++;
+                document.getElementById('currentPlateNum').textContent = currentPlate + 1;
+                updatePlatesPreview();
+            }
+        }
+
+        // Generate preview from server
+        function generatePlatesPreview() {
+            const period = document.getElementById('platesPeriodSelect').value;
+            if (!period) {
+                alert('Seleziona un periodo');
+                return;
+            }
+
+            const plate = plateAssignments[currentPlate];
+            if (!plate || plate.items.length === 0) {
+                alert('Nessun item da mostrare');
+                return;
+            }
+
+            fetch('/api/plates/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: plate.items.map(i => i.id),
+                    layout_id: selectedLayout,
+                    caption_format: document.getElementById('captionFormat').value
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.preview) {
+                    const img = new Image();
+                    img.onload = function() {
+                        platesCanvas.clear();
+                        fabric.Image.fromURL(data.preview, function(fImg) {
+                            fImg.set({
+                                left: 0,
+                                top: 0,
+                                scaleX: 595 / fImg.width,
+                                scaleY: 842 / fImg.height
+                            });
+                            platesCanvas.add(fImg);
+                            platesCanvas.renderAll();
+                        });
+                    };
+                    img.src = data.preview;
+                }
+            })
+            .catch(err => console.error('Error generating preview:', err));
+        }
+
+        // Generate PDF
+        function generatePlatesPDF() {
+            const period = document.getElementById('platesPeriodSelect').value;
+            if (!period) {
+                alert('Seleziona un periodo');
+                return;
+            }
+
+            if (platesItems.length === 0) {
+                alert('Nessun item da esportare');
+                return;
+            }
+
+            addLog('Generazione PDF tavole in corso...', 'info');
+
+            fetch('/api/plates/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: platesItems.map(i => i.id),
+                    layout_id: selectedLayout,
+                    period: period,
+                    group_by_us: document.getElementById('groupByUS').checked,
+                    caption_format: document.getElementById('captionFormat').value
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.filename) {
+                    addLog('PDF generato: ' + data.filename, 'success');
+                    window.open('/api/plates/download/' + data.filename, '_blank');
+                } else {
+                    addLog('Errore: ' + (data.error || 'Generazione fallita'), 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Error generating PDF:', err);
+                addLog('Errore generazione PDF', 'error');
+            });
+        }
+
+        // Generate Excel report
+        function generatePlatesExcel() {
+            const period = document.getElementById('platesPeriodSelect').value;
+            if (!period) {
+                alert('Seleziona un periodo');
+                return;
+            }
+
+            if (plateAssignments.length === 0) {
+                alert('Nessuna tavola da esportare');
+                return;
+            }
+
+            addLog('Generazione report Excel in corso...', 'info');
+
+            // Prepare plates data
+            const platesData = plateAssignments.map((plate, idx) => ({
+                plate_number: idx + 1,
+                period: period,
+                us: plate.us || '',
+                items: plate.items.map(i => ({
+                    id: i.id,
+                    us: i.us,
+                    sito: i.sito
+                }))
+            }));
+
+            fetch('/api/plates/report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plates: platesData })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.filename) {
+                    addLog('Report Excel generato: ' + data.filename, 'success');
+                    window.open('/api/plates/download/' + data.filename, '_blank');
+                } else {
+                    addLog('Errore: ' + (data.error || 'Generazione fallita'), 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Error generating Excel:', err);
+                addLog('Errore generazione report', 'error');
+            });
         }
     </script>
 </body>
