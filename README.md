@@ -164,16 +164,6 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 **Enzo Cocca**
 
-## Acknowledgments
-
-- Khatt University of Technology Museum for pottery collections
-- Schmidt 1937 pottery corpus for reference collection
-- Flask and SocketIO for the web framework
-
 ## Related Projects
 
 - [ceramic-classifier](https://github.com/enzococca/ceramic-classifier) - Universal pottery classifier for any database
-
-## References
-
-- Schmidt, E. F. (1937). *Excavations at Tepe Hissar, Damghan*. University of Pennsylvania Press.
